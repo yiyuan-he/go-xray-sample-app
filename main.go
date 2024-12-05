@@ -16,7 +16,8 @@ import (
 
 var s3Client *s3.Client
 
-func listBuckets(w http.ResponseWriter, r *http.Request) {
+// Manual X-Ray instrumentation
+func listBucketsManual(w http.ResponseWriter, r *http.Request) {
     // Get the context from the request which contains X-Ray segment
     ctx := r.Context()
 
@@ -31,21 +32,20 @@ func listBuckets(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Convert to a simple format for JSON response
-    var buckets []map[string]string
-    for _, bucket := range result.Buckets {
-        bucketInfo := map[string]string{
-            "name": *bucket.Name,
-            "creation_date": bucket.CreationDate.String(),
-        }
-        buckets = append(buckets, bucketInfo)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(result.Buckets)
+}
+
+// AWS SDK auto-instrumentation
+func listBucketsAuto(w http.ResponseWriter, r *http.Request) {
+    result, err := s3Client.ListBuckets(r.Context(), &s3.ListBucketsInput{})
+    if err != nil {
+        http.Error(w, fmt.Sprintf("unable to list buckets: %v", err), http.StatusInternalServerError)
+        return
     }
 
-    // Add metadata about the number of buckets to the subsegment
-    subseg.AddMetadata("bucket_count", len(buckets))
-
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(buckets)
+    json.NewEncoder(w).Encode(result.Buckets)
 }
 
 func main() {
@@ -73,8 +73,13 @@ func main() {
     s3Client = s3.NewFromConfig(cfg)
 
     // Set up HTTP routes with the X-Ray handler
-    http.Handle("/s3-list-buckets", xray.Handler(xray.NewFixedSegmentNamer("go-xray-sample-app"), 
-        http.HandlerFunc(listBuckets)))
+    http.Handle("/list-buckets-manual",
+        xray.Handler(xray.NewFixedSegmentNamer("list-buckets-manual"),
+        http.HandlerFunc(listBucketsManual)))
+
+    http.Handle("/list-buckets-auto",
+        xray.Handler(xray.NewFixedSegmentNamer("list-buckets-auto"),
+        http.HandlerFunc(listBucketsAuto)))
 
     // Start server
     fmt.Println("Server starting on :8080")
