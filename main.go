@@ -16,27 +16,7 @@ import (
 
 var s3Client *s3.Client
 
-// Manual X-Ray instrumentation
-func listBucketsManual(w http.ResponseWriter, r *http.Request) {
-	// Get the context from the request which contains X-Ray segment
-	ctx := r.Context()
-
-	// Start a subsegment for the S3 Operation
-	ctx, subseg := xray.BeginSubsegment(ctx, "ListS3Buckets")
-	defer subseg.Close(nil)
-
-	result, err := s3Client.ListBuckets(ctx, &s3.ListBucketsInput{})
-	if err != nil {
-		subseg.AddError(err)
-		http.Error(w, fmt.Sprintf("unable to list buckets: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result.Buckets)
-}
-
-// AWS SDK auto-instrumentation
+// Test AWS SDK Instrumentation
 func listBucketsAuto(w http.ResponseWriter, r *http.Request) {
 	result, err := s3Client.ListBuckets(r.Context(), &s3.ListBucketsInput{})
 	if err != nil {
@@ -72,13 +52,8 @@ func main() {
 	// Create an S3 client
 	s3Client = s3.NewFromConfig(cfg)
 
-	// Set up HTTP routes with the X-Ray handler
-	http.Handle("/list-buckets-manual",
-		xray.Handler(xray.NewFixedSegmentNamer("list-buckets-manual"),
-			http.HandlerFunc(listBucketsManual)))
-
-	http.Handle("/list-buckets-auto",
-		xray.Handler(xray.NewFixedSegmentNamer("list-buckets-auto"),
+	http.Handle("/aws-sdk-call",
+		xray.Handler(xray.NewFixedSegmentNamer("aws-sdk-call"),
 			http.HandlerFunc(listBucketsAuto)))
 
 	// Start server
