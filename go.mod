@@ -9,6 +9,8 @@ require (
 	github.com/aws/aws-xray-sdk-go v1.8.5
 )
 
+replace github.com/aws/aws-xray-sdk-go => github.com/yiyuan-he/aws-xray-sdk-go v0.0.0-20241114215350-14b1ee0d5b88
+
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aws/aws-sdk-go v1.47.9 // indirect
